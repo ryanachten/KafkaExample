@@ -1,9 +1,20 @@
 using Confluent.Kafka;
 using static Common.Constants;
 
+/// Allows for demonstration of how consumers are treated differently
+/// when they are part of the same group, versus when they have different group IDs
+/// - If consumers have the same group ID, messages should be allocated between them
+/// - If consumers have different group IDs, they should receive all messages in a broadcast-fashion
+Console.WriteLine("Enter consumer group ID:");
+var groupId = Console.ReadLine();
+if (groupId == null || groupId == string.Empty)
+{
+    throw new ArgumentException("Group ID cannot be empty");
+}
+
 var config = new ConsumerConfig()
 {
-    GroupId = "weather-consumer",
+    GroupId = groupId,
     BootstrapServers = Configuration.KafkaConnectUri,
     AutoOffsetReset = AutoOffsetReset.Earliest,
 };

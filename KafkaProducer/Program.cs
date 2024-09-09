@@ -4,7 +4,6 @@ using static Common.Constants;
 var config = new ProducerConfig
 {
     BootstrapServers = Configuration.KafkaConnectUri,
-    Acks = Acks.Leader,
 };
 
 using var producer = new ProducerBuilder<Null, string>(config).Build();
