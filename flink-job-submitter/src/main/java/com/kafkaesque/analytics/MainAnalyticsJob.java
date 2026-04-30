@@ -78,7 +78,7 @@ public class MainAnalyticsJob {
         String schemaRegistryUrl = params.get("kafka.schema.registry.url");
         String sourceTopic = params.get("flink.source.topic");
         String sinkTopic = params.get("flink.sink.topic");
-        String sinkSubject = params.get("flink.sink.subject", "order.analytics");
+        String sinkSubject = params.get("flink.sink.subject", sinkTopic + "-value");
         String groupId = params.get("flink.source.group.id");
         long checkpointInterval = params.getLong("flink.checkpoint.interval", 60000L);
         long watermarkInterval = params.getLong("flink.watermark.interval", 1000L);

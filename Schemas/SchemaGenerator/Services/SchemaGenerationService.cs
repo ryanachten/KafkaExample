@@ -17,14 +17,13 @@ public class SchemaGenerationService : ISchemaGenerationService
         _logger = logger;
         _projectDir = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", ".."));
 
-        // Output to Schemas/Generated/ directory (parent project)
-        var solutionDir = Path.GetFullPath(Path.Combine(_projectDir, ".."));
-        _outputPath = Path.Combine(solutionDir, "Generated");
+        var repoRoot = Path.GetFullPath(Path.Combine(_projectDir, ".."));
+        _outputPath = Path.Combine(repoRoot, "Schemas", "Generated");
     }
 
     public async Task GenerateCodeFromSchemas(CancellationToken cancellationToken = default)
     {
-        var schemasPath = Path.Combine(_projectDir, SchemasPath);
+        var schemasPath = Path.Combine(_projectDir, "Avro");
 
         if (!Directory.Exists(schemasPath))
         {
@@ -61,18 +60,11 @@ public class SchemaGenerationService : ISchemaGenerationService
 
         try
         {
-            var solutionDir = Path.GetFullPath(Path.Combine(_projectDir, ".."));
-            var avrogenPath = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-                ".dotnet",
-                "tools",
-                "avrogen");
-            
             var processStartInfo = new ProcessStartInfo
             {
-                FileName = avrogenPath,
-                Arguments = $"-s \"{schemaFilePath}\" \"{_outputPath}\"",
-                WorkingDirectory = solutionDir,
+                FileName = "dotnet",
+                Arguments = $"avrogen -s \"{schemaFilePath}\" \"{_outputPath}\"",
+                WorkingDirectory = _projectDir,
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
                 UseShellExecute = false,
