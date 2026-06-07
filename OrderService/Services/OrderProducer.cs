@@ -10,35 +10,39 @@ namespace OrderService.Services;
 
 public sealed class OrderProducer : IOrderProducer, IDisposable
 {
-    private readonly IProducer<string, OrderPlaced> _producer;
+    private readonly Lazy<IProducer<string, OrderPlaced>> _producer;
     private readonly ILogger<OrderProducer> _logger;
 
-    public OrderProducer(IOptions<KafkaConfiguration> kafkaOptions, ILogger<OrderProducer> logger)
+    public OrderProducer(
+        IOptions<KafkaConfiguration> kafkaOptions,
+        ILogger<OrderProducer> logger)
     {
         var kafkaConfig = kafkaOptions.Value;
-        var producerConfig = new ProducerConfig()
+        var schemaRegistryUrl = kafkaConfig.SchemaRegistryUrl;
+        
+        _producer = new Lazy<IProducer<string, OrderPlaced>>(() =>
         {
-            BootstrapServers = kafkaConfig.BootstrapServers,
-        };
+            var producerConfig = new ProducerConfig
+            {
+                BootstrapServers = kafkaConfig.BootstrapServers,
+            };
 
-        var schemaRegistryConfig = new SchemaRegistryConfig()
-        {
-            Url = kafkaConfig.SchemaRegistryUrl
-        };
+            var schemaRegistryConfig = new SchemaRegistryConfig
+            {
+                Url = schemaRegistryUrl
+            };
+            var schemaRegistryClient = new CachedSchemaRegistryClient(schemaRegistryConfig);
 
-        var schemaRegistryClient = new CachedSchemaRegistryClient(schemaRegistryConfig);
+            var avroSerializerConfig = new AvroSerializerConfig
+            {
+                AutoRegisterSchemas = false,
+                UseLatestVersion = true
+            };
 
-        // NOTE: AutoRegisterSchemas is disabled to avoid auto-generation issues.
-        // The schema must be registered in the Schema Registry first.
-        var avroSerializerConfig = new AvroSerializerConfig
-        {
-            AutoRegisterSchemas = false,
-            UseLatestVersion = true
-        };
-
-        _producer = new ProducerBuilder<string, OrderPlaced>(producerConfig)
-            .SetValueSerializer(new AvroSerializer<OrderPlaced>(schemaRegistryClient, avroSerializerConfig))
-            .Build();
+            return new ProducerBuilder<string, OrderPlaced>(producerConfig)
+                .SetValueSerializer(new AvroSerializer<OrderPlaced>(schemaRegistryClient, avroSerializerConfig))
+                .Build();
+        });
 
         _logger = logger;
     }
@@ -47,7 +51,7 @@ public sealed class OrderProducer : IOrderProducer, IDisposable
     {
         try
         {
-            await _producer.ProduceAsync(Topics.OrderPlaced, new Message<string, OrderPlaced>()
+            await _producer.Value.ProduceAsync(Topics.OrderPlaced, new Message<string, OrderPlaced>()
             {
                 Key = order.OrderShortCode,
                 Value = order,
@@ -63,6 +67,7 @@ public sealed class OrderProducer : IOrderProducer, IDisposable
 
     public void Dispose()
     {
-        _producer.Dispose();
+        if (_producer.IsValueCreated)
+            _producer.Value.Dispose();
     }
 }

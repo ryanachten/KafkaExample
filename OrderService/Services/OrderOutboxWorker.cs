@@ -1,4 +1,5 @@
 
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Options;
 using OrderService.Configuration;
 using OrderService.Helpers;
@@ -11,11 +12,14 @@ namespace OrderService.Services;
 public sealed class OrderOutboxWorker(
     IServiceProvider serviceProvider,
     IOptions<OutboxOptions> outboxOptions,
-    ILogger<OrderOutboxWorker> logger) : IHostedService, IDisposable
+    ILogger<OrderOutboxWorker> logger) : IHostedService, IHealthCheck
 {
     private PeriodicTimer? _timer;
     private Task? _executingTask;
     private CancellationTokenSource? _tokenSource;
+    private readonly SemaphoreSlim _startedSignal = new(0, 1);
+
+    public bool IsReady => _startedSignal.CurrentCount > 0;
 
     public Task StartAsync(CancellationToken cancellationToken)
     {
@@ -37,10 +41,20 @@ public sealed class OrderOutboxWorker(
     {
         _tokenSource?.Dispose();
         _timer?.Dispose();
+        _startedSignal?.Dispose();
+    }
+
+    public async Task<HealthCheckResult> CheckHealthAsync(HealthCheckContext context, CancellationToken cancellationToken = default)
+    {
+        await _startedSignal.WaitAsync(cancellationToken);
+        return HealthCheckResult.Healthy("Outbox worker initialized");
     }
 
     private async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        _startedSignal.Release();
+        logger.LogInformation("OrderOutboxWorker executing");
+
         try
         {
             while (await _timer!.WaitForNextTickAsync(stoppingToken))

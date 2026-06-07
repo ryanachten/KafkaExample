@@ -2,6 +2,7 @@ using Confluent.Kafka;
 using Confluent.Kafka.SyncOverAsync;
 using Confluent.SchemaRegistry;
 using Confluent.SchemaRegistry.Serdes;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Options;
 using OrderService.Models;
 using OrderService.Repositories;
@@ -11,7 +12,7 @@ using Schemas;
 
 namespace OrderService.Services;
 
-public sealed class OrderFulfilledConsumer : IHostedService, IDisposable
+public sealed class OrderFulfilledConsumer : IHostedService, IHealthCheck
 {
     private IConsumer<string, OrderFulfilled>? _consumer;
     private IProducer<string, OrderFulfilled>? _deadLetterProducer;
@@ -22,6 +23,9 @@ public sealed class OrderFulfilledConsumer : IHostedService, IDisposable
     private readonly ConsumerRetryConfiguration _retryConfig;
     private readonly KafkaConfiguration _kafkaConfig;
     private Task? _executingTask;
+    private readonly SemaphoreSlim _startedSignal = new(0, 1);
+
+    public bool IsReady => _startedSignal.CurrentCount > 0;
 
     public OrderFulfilledConsumer(
         IOptions<KafkaConfiguration> kafkaOptions,
@@ -115,15 +119,30 @@ public sealed class OrderFulfilledConsumer : IHostedService, IDisposable
 
     public void Dispose()
     {
+        _startedSignal?.Dispose();
         _consumer?.Dispose();
         _deadLetterProducer?.Dispose();
         _schemaRegistryClient?.Dispose();
         _tokenSource?.Dispose();
     }
 
+    public async Task<HealthCheckResult> CheckHealthAsync(HealthCheckContext context, CancellationToken cancellationToken = default)
+    {
+        await _startedSignal.WaitAsync(cancellationToken);
+        return HealthCheckResult.Healthy("Kafka consumer subscribed");
+    }
+
     private async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        if (_consumer is null) return;
+        if (_consumer is null)
+        {
+            _logger.LogWarning("Consumer not initialized, skipping");
+            _startedSignal.Release();
+            return;
+        }
+
+        _startedSignal.Release();
+        _logger.LogInformation("OrderFulfilledConsumer executing");
 
         try
         {
