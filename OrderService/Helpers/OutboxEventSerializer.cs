@@ -35,6 +35,7 @@ public static class OutboxEventSerializer
         {
             OrderShortCode = order.OrderShortCode,
             CustomerId = order.CustomerId.ToString(),
+            Timestamp = DateTime.UtcNow,
             Items = [.. order.Items.Select(i => new OrderPlacedItem()
             {
                 ProductId = i.ProductId.ToString(),

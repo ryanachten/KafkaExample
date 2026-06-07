@@ -6,23 +6,24 @@ namespace SchemaGenerator.Services;
 
 public class SchemaGenerationService : ISchemaGenerationService
 {
-    private const string SchemasPath = "../Avro";
+    private const string SchemasPath = "./Avro";
     private readonly ILogger<SchemaGenerationService> _logger;
     private readonly string _outputPath;
+    private readonly string _projectDir;
 
     public SchemaGenerationService(
         ILogger<SchemaGenerationService> logger)
     {
         _logger = logger;
+        _projectDir = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", ".."));
 
-        // Output to Schemas/Generated/ directory (parent project)
-        var solutionDir = Path.GetFullPath(Path.Combine(Directory.GetCurrentDirectory(), ".."));
-        _outputPath = Path.Combine(solutionDir, "Generated");
+        var repoRoot = Path.GetFullPath(Path.Combine(_projectDir, ".."));
+        _outputPath = Path.Combine(repoRoot, "Schemas", "Generated");
     }
 
     public async Task GenerateCodeFromSchemas(CancellationToken cancellationToken = default)
     {
-        var schemasPath = Path.Combine(Directory.GetCurrentDirectory(), SchemasPath);
+        var schemasPath = Path.Combine(_projectDir, "Avro");
 
         if (!Directory.Exists(schemasPath))
         {
@@ -59,12 +60,11 @@ public class SchemaGenerationService : ISchemaGenerationService
 
         try
         {
-            var solutionDir = Path.GetFullPath(Path.Combine(Directory.GetCurrentDirectory(), ".."));
             var processStartInfo = new ProcessStartInfo
             {
-                FileName = "avrogen",
-                Arguments = $"-s \"{schemaFilePath}\" \"{_outputPath}\"",
-                WorkingDirectory = solutionDir,
+                FileName = "dotnet",
+                Arguments = $"avrogen -s \"{schemaFilePath}\" \"{_outputPath}\"",
+                WorkingDirectory = _projectDir,
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
                 UseShellExecute = false,
